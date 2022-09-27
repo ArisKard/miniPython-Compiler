@@ -1,0 +1,216 @@
+Package minipython;
+
+Helpers
+	digit = ['0' .. '9'];
+	letter = ['a' .. 'z']|['A' .. 'Z'];
+	cr = 13;
+	lf = 10;
+	all = [0..127];
+	eol = lf | cr | cr lf ;
+	not_eol = [all - [cr + lf]];
+
+Tokens
+	tab = 9;
+	plus = '+';
+	minus = '-';
+	mult = '*';
+	div = '/';
+	mod = '%';
+	pow = '**';
+	assign = '=';
+	assigndiff = '-=';
+	assignquot = '/=';
+	l_par = '(';
+	r_par = ')';
+	l_br = '[';
+	r_br = ']';
+	dot = '.';
+	comma=',';
+	def = 'def';
+	return = 'return';
+	open = 'open';
+	type = 'type';
+	max = 'max';
+	min = 'min';
+	while = 'while';
+	for = 'for';
+	in = 'in';
+	if = 'if';
+	print = 'print';
+	assert = 'assert';
+	less = '<';
+	great = '>';
+	greq = '>=';
+	leq = '<=';
+	neq = '!=';
+	eq = '==';
+	not = 'not';
+	and = 'and';
+	or = 'or';
+	true = 'true';
+	semi = ':';
+	false = 'false';
+	else = 'else';
+	none = 'none';
+	blank = (' ' | lf | cr);
+	line_comment = '#' not_eol* eol;
+	number = digit+ | (digit+ '.' digit+);
+	id = letter (letter | digit)*;
+	stringdoubleq = '"'not_eol* '"';
+	stringsingleq = '''not_eol* ''';
+
+Ignored Tokens
+	blank, line_comment;
+
+Productions
+
+	goal = commands*{-> New goal ([commands])};
+
+	commands = {stat} statement {-> New commands.stat(statement)} |
+				 		 {func} function {-> New commands.func(function)};
+
+
+
+  function = {func} def id l_par argument* r_par semi statement {-> New function.func (id, [argument], statement)};
+
+	argument = {arg} id assign_value? comma? {-> New argument.arg(id, [assign_value.statement])};
+
+	assign_value{->statement} = {assign_value} assign something{->New statement.assign_value(something.expression)};
+
+	statement = {if} tab* if comparison semi statement {-> New statement.if(comparison, statement)} |
+							{while} tab* while comparison semi statement {-> New statement.while(comparison, statement)} |
+							{for} tab* for [l]: id in [r]: id semi statement {-> New statement.for(l, r, statement)} |
+							{return }tab* return expression {-> New statement.return(expression)} |
+							{print} tab* print expression comma_exp* {-> New statement.print(expression, [comma_exp.expression])} |
+							{assign} tab* id assign expression {-> New statement.assign(id, expression)} |
+							{assigndiff} tab* id assigndiff expression {-> New statement.assigndiff(id, expression)} |
+							{assignquot} tab* id assignquot expression {-> New statement.assignquot(id, expression)}|
+							{list_item_assign} tab* id l_br number r_br assign expression {-> New statement.list_item_assign(id, number, expression)} |
+							{assert} tab* assert expression comma_exp? {-> New statement.assert(expression, [comma_exp.expression])}|
+							{functioncall} tab* id l_par arglist? r_par {-> New statement.functioncall(id, [arglist.expression])};
+
+	comparison = {andcomp} andcomp {-> andcomp.comparison} |
+					 		 {or} comparison or andcomp {->New comparison.or(comparison, andcomp.comparison)} ;
+
+	andcomp{->comparison} = {not} notcomp {-> notcomp.comparison}|
+													{and} andcomp and notcomp {->New comparison.and(andcomp.comparison, notcomp.comparison)} ;
+
+  notcomp{->comparison} = {compare} compare {-> compare.comparison} |
+													{not} not compare {-> New comparison.not(compare.comparison)};
+
+  compare{->comparison} = {comp_par} comp_par {-> comp_par.comparison} |
+												  {lessc} [l]:expression less [r]:expression {-> New comparison.lessc(l,r)} |
+													{greatc} [l]:expression great [r]:expression {-> New comparison.greatc(l,r)} |
+													{lesseq} [l]:expression leq [r]:expression {-> New comparison.lesseq(l,r)} |
+													{greateq} [l]:expression greq [r]:expression {-> New comparison.greateq(l,r)} |
+													{neq} [l]:expression neq [r]:expression {-> New comparison.neq(l,r)} |
+													{eq} [l]:expression eq [r]:expression {-> New comparison.eq(l,r)};
+
+	comp_par{->comparison} = {trueorfalse} trueorfalse {-> trueorfalse.comparison} |
+						 							 {parentheses} l_par comparison r_par {-> comparison};
+
+  trueorfalse{->comparison} = {true} true {-> New comparison.true()} |
+															{false} false {-> New comparison.false()};
+
+	expression = {multiplication} multiplication {-> multiplication.expression} |
+							 {addition} expression plus multiplication {-> New expression.addition(expression, multiplication.expression)} |
+							 {subtraction} expression minus multiplication {-> New expression.subtraction(expression, multiplication.expression)} |
+							 {open} open l_par [l]: expression comma [r]: expression r_par {-> New expression.open(l,r)} |
+							 {type} type l_par expression r_par {-> New expression.type(expression)};
+
+
+	multiplication{->expression} = {power} power {-> power.expression}|
+									 							 {multiplication} multiplication mult power {-> New expression.multiplication(multiplication.expression, power.expression)} |
+									 						 	 {division} multiplication div power {-> New expression.division(multiplication.expression, power.expression)} |
+									 						 	 {mod} multiplication mod power {-> New expression.mod(multiplication.expression, power.expression)};
+
+	power{->expression} = {maxmin} maxmin {-> maxmin.expression} |
+											  {power} power pow maxmin {-> New expression.power(power.expression, maxmin.expression)};
+
+  maxmin{->expression} = {functioncalldot} functioncalldot {-> functioncalldot.expression} |
+												 {max} max l_par functioncalldot comma_funcall+ r_par{-> New expression.max(functioncalldot.expression, [comma_funcall.expression])} |
+												 {min} min l_par functioncalldot comma_funcall+ r_par {-> New expression.min(functioncalldot.expression, [comma_funcall.expression])} ;
+
+  functioncalldot{->expression} = {functioncall} functioncall {->functioncall.expression} |
+																	{functioncalldot} [l]: id dot [r]: id l_par arglist? r_par {-> New expression.functioncalldot(l, r, [arglist.expression])};
+
+  functioncall{->expression} = {list} item_of_list {->item_of_list.expression} |
+															 {functioncall} id l_par arglist? r_par {-> New expression.functioncall(id, [arglist.expression])};
+
+  item_of_list{->expression} = {list} list {->list.expression} |
+											         {item_of_list} id l_br expression comma_exp* r_br {-> New expression.item_of_list(id, expression, [comma_exp.expression])};
+
+  list{->expression} = {parentheses} par {->par.expression} |
+											 {list} l_br expression comma_exp* r_br {-> New expression.list([expression comma_exp.expression])};
+
+  par{->expression} = {something} something{-> something.expression} |
+	      							{parentheses} l_par expression r_par{-> expression};
+
+	something{->expression} =  {identifier} id {-> New expression.identifier(id)} |
+														 {numb} number {-> New expression.numb(number)} |
+														 {none} none {-> New expression.none(none)} |
+						  						   {stringdoubleq} stringdoubleq {-> New expression.stringdoubleq(stringdoubleq)} |
+														 {stringsingleq} stringsingleq {-> New expression.stringsingleq(stringsingleq)};
+
+  arglist {-> expression} = {arglist} expression comma_exp* {->New expression.arglist([expression comma_exp.expression])};
+
+  comma_exp {-> expression} = comma expression {-> expression};
+
+  comma_funcall{-> expression} = comma functioncalldot {-> functioncalldot.expression};
+
+Abstract Syntax Tree
+
+	goal = commands*;
+
+	commands = {stat} statement |
+						 {func} function;
+
+  function = {func} id argument* statement;
+
+	argument = {arg} id statement*;
+
+	statement = {if} comparison statement |
+							{while} comparison statement |
+							{for} [l]: id [r]: id statement |
+							{return} expression |
+							{print} [l]: expression [r]: expression* |
+							{assign} id expression |
+							{assigndiff} id expression |
+							{assignquot} id expression |
+							{list_item_assign} id number expression |
+							{assert} [l]: expression [r]: expression* |
+							{functioncall} id expression* |
+							{assign_value} expression;
+
+ comparison = {or} [l]:comparison [r]:comparison |
+ 							{and} [l]:comparison [r]:comparison |
+							{not} comparison |
+							{lessc} [l]:expression [r]:expression |
+							{greatc} [l]:expression [r]:expression |
+							{lesseq} [l]:expression [r]:expression |
+							{greateq} [l]:expression [r]:expression |
+							{neq} [l]:expression [r]:expression |
+							{eq} [l]:expression [r]:expression |
+							{true} |
+							{false};
+
+expression = {addition} [l]:expression [r]:expression |
+					   {subtraction} [l]:expression [r]:expression |
+					   {multiplication} [l]:expression [r]:expression |
+					   {division} [l]:expression [r]:expression |
+					   {power} [l]:expression [r]:expression |
+					   {mod} [l]:expression [r]:expression |
+					   {open} [l]:expression [r]:expression |
+					   {type} expression |
+					   {max} [l]: expression [r]: expression* |
+					   {min} [l]: expression [r]: expression* |
+					   {list}expression* |
+						 {arglist}expression* |
+						 {identifier} id |
+						 {numb} number |
+						 {functioncalldot} [l]: id [r]: id [re]: expression* |
+						 {functioncall} id expression* |
+						 {none} none |
+						 {item_of_list} id [l]: expression [r]: expression* |
+						 {stringdoubleq} stringdoubleq |
+						 {stringsingleq}stringsingleq;
